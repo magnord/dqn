@@ -93,6 +93,7 @@ class DQN(Checkpointer):
         #self.optim = tf.train.RMSPropOptimizer(learning_rate=self.learning_rate, decay=0.9).minimize(self.loss, global_step=self.global_step)
 
         tf.scalar_summary("loss", self.loss)
+        tf.scalar_summary("rewards_mean", tf.reduce_mean(self.true_reward))
 
         action = np.zeros(self.num_actions)
         action[0] = 1
