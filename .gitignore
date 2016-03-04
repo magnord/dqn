@@ -1,0 +1,11 @@
+.ipynb_checkpoints/
+__pycache__/
+*.pyc
+*.pyo
+notebooks/Goofiness.ipynb
+checkpoint/
+checkpoints/
+log/
+logs/
+.idea/
+
