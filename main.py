@@ -16,6 +16,7 @@ flags.DEFINE_integer("memory_size", 100000, "The size of the experience replay m
 flags.DEFINE_string("game_name", "game", "The name of game [game]")
 flags.DEFINE_string("checkpoint_dir", "checkpoints", "Directory name to save the checkpoints [checkpoint]")
 flags.DEFINE_string("log_dir", "logs", "Directory name to save summaries from training runs [logs]")
+flags.DEFINE_boolean("no_logging", False, "Do not log any summaries [False]")
 flags.DEFINE_boolean("forward_only", False, "True for forward only, False for training [False]")
 flags.DEFINE_boolean("visualize", False, "Visualize the game [False]")
 flags.DEFINE_boolean("load_checkpoint", False, "Load previous checkpoint [False]")

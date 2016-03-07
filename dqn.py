@@ -39,7 +39,6 @@ class DQN(Checkpointer):
         self.learning_rate = f.learning_rate
 
         self.game = game
-        self.dataset = game.name
         self.f = f
         self.num_actions = len(self.game.actions)
         self.observation_size = self.game.observation_size
@@ -103,9 +102,9 @@ class DQN(Checkpointer):
         self.initialize()
 
         self.start_time = time.time()
-        start_iter = self.global_step.eval()
-        print('start_iter: ' + str(start_iter))
-        final_step = start_iter + self.max_steps
+        self.start_iter = self.global_step.eval()
+        print('start_iter: ' + str(self.start_iter))
+        final_step = self.start_iter + self.max_steps
 
         self.state_t = self.game.observation()
         print("Start")
@@ -115,7 +114,7 @@ class DQN(Checkpointer):
             plt.show()
         else:
             # Simulation step without animation
-            for step_no in range(start_iter, final_step):
+            for step_no in range(self.start_iter, final_step):
                 self.do_step(step_no)
 
     def animate(self, frame):
@@ -168,7 +167,7 @@ class DQN(Checkpointer):
                     # Otherwise discounted future reward of best action
                     y.append(r[i] + self.discount * np.max(predicted_reward[i]))
 
-            write_summaries = step_no % 100 == 0
+            write_summaries = step_no % 100 == 0 and not self.f.no_logging
 
             # Run a training step in the network
             _, loss, summaries = self.sess.run([self.optim,
@@ -186,8 +185,9 @@ class DQN(Checkpointer):
 
             # Print progress
             if step_no % 100 == 0:
+                n = step_no if not self.f.visualize else step_no + self.start_iter - 1
                 print("Step: [%2d/%7d] time: %4.2f, loss: %.4f, action score mean: %.4f, e: %.6f" % (
-                    step_no, self.max_steps, time.time() - self.start_time, loss, np.mean(action_scores[0]), self.epsilon))
+                    n, self.max_steps, time.time() - self.start_time, loss, np.mean(action_scores[0]), self.epsilon))
 
             # Write summaries for Tensorboard
             if write_summaries:

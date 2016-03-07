@@ -11,7 +11,7 @@ class Checkpointer(object):
         pass
 
     def get_model_dir(self):
-        model_dir = self.dataset
+        model_dir = self.game.name
         for attr in self.attributes:
             if hasattr(self, attr):
                 model_dir += "_%s:%s" % (attr, getattr(self, attr))
@@ -32,11 +32,12 @@ class Checkpointer(object):
 
     def initialize(self):
         self.no_op = tf.no_op()  # Used instead of merged_sum when no summaries are needed
-        self.merged_sum = tf.merge_all_summaries()
-        final_log_dir = os.path.join(self.log_dir, self.get_model_dir())
-        if not os.path.exists(final_log_dir):
-            os.makedirs(final_log_dir)
-        self.writer = tf.train.SummaryWriter(final_log_dir)
+        if not self.f.no_logging:
+            self.merged_sum = tf.merge_all_summaries()
+            final_log_dir = os.path.join(self.log_dir, self.get_model_dir())
+            if not os.path.exists(final_log_dir):
+                os.makedirs(final_log_dir)
+            self.writer = tf.train.SummaryWriter(final_log_dir)
 
         tf.initialize_all_variables().run()
         if self.f.load_checkpoint:
