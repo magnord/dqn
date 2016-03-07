@@ -6,12 +6,12 @@ import matplotlib.pyplot as plt
 from euclid import Point2, LineSegment2
 
 """
-Catch floating balls. Actions are 'up', 'down', 'left and 'right'.
+Catch bouncing balls. Actions are 'up', 'down', 'left and 'right'.
 """
 
 force = 0.05  # Magnitude of force applied by action
 num_balls = 10
-radius = 0.05
+radius = 0.04
 max_x = 1.0
 max_y = 1.0
 max_ball_speed = 0.005
