@@ -46,6 +46,7 @@ class DQN(Checkpointer):
 
         self.attributes = ['learning_rate', 'final_epsilon', 'gamma', 'memory_size', 'batch_size']
         self.checkpoint_dir = f.checkpoint_dir
+        self.log_dir = f.log_dir
 
         if f.visualize:
             game.init_visualization()
@@ -103,7 +104,7 @@ class DQN(Checkpointer):
 
         self.start_time = time.time()
         start_iter = self.global_step.eval()
-        print('start_iter' + str(start_iter))
+        print('start_iter: ' + str(start_iter))
         final_step = start_iter + self.max_steps
 
         self.state_t = self.game.observation()
@@ -133,7 +134,7 @@ class DQN(Checkpointer):
 
         action_t[action_idx] = 1
 
-        # Decrease epsilon (TODO: Improve decreasing formula)
+        # Decrease epsilon (TODO: Improve decreasing formula to include step_no)
         if self.epsilon > self.final_epsilon and step_no > self.observe:
             self.epsilon -= (self.start_epsilon - self.final_epsilon) / (100 * self.observe)  # ?
 

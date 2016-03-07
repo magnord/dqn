@@ -5,7 +5,6 @@ __pycache__/
 notebooks/Goofiness.ipynb
 checkpoint/
 checkpoints/
-log/
-logs/
+log*/
 .idea/
 
