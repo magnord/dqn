@@ -102,17 +102,13 @@ class BallsGame(object):
         self.px += self.pxv
         self.py += self.pyv
 
-        # Wrap ball positions if outside playing field
-        self.bx[self.bx > max_x] -= max_x
-        self.bx[self.bx < 0.0] += max_x
-        self.by[self.by > max_y] -= max_y
-        self.by[self.by < 0.0] += max_y
+        # Bounce ball if outside playing field
+        np.putmask(self.bxv, np.logical_or(self.bx < 0.0, self.bx > max_x), -self.bxv)
+        np.putmask(self.byv, np.logical_or(self.by < 0.0, self.by > max_y), -self.byv)
 
-        # Wrap player position
-        if self.px > max_x: self.px -= max_x
-        if self.px < 0.0: self.px += max_x
-        if self.py > max_y: self.py -= max_y
-        if self.py < 0.0: self.py += max_y
+        # Bound player position
+        self.px = max(min(self.px, max_x), 0.0)
+        self.py = max(min(self.py, max_y), 0.0)
 
         # Check for player-ball collision
         dist_x = np.square(self.bx - self.px)

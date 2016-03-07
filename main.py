@@ -34,7 +34,7 @@ def main(_):
     with tf.Session() as sess:
         with tf.device('/cpu:0'):
             dqn = DQN(sess, game, flags.FLAGS)
-            dqn.train(flags.FLAGS)
+            dqn.train()
 
 
 if __name__ == '__main__':

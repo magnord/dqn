@@ -31,7 +31,7 @@ class DQN(Checkpointer):
         self.epsilon = self.start_epsilon = f.start_epsilon
         self.final_epsilon = f.final_epsilon
         self.observe = 500
-        self.gamma = 0.99
+        self.discount = 0.99  # Gamma
         self.num_action_per_step = 1
         self.memory_size = f.memory_size
         self.batch_size = f.batch_size
@@ -76,11 +76,11 @@ class DQN(Checkpointer):
 
         return observation, action_scores, h_fc1
 
-    def train(self, f):
+    def train(self):
         """Train a Deep Q Network.
-        :param f: Flags
 
         """
+        f = self.f
         self.global_step = tf.Variable(0, name='global_step', trainable=False)
         self.actions = tf.placeholder(tf.float32, [self.batch_size, self.num_actions])
         self.true_reward = tf.placeholder(tf.float32, [self.batch_size])
@@ -90,7 +90,8 @@ class DQN(Checkpointer):
         self.action_reward = tf.reduce_sum(tf.mul(self.action_scores, self.actions), reduction_indices=1)
         self.loss = tf.reduce_sum(tf.square(self.true_reward - self.action_reward))
         self.optim = tf.train.AdamOptimizer(f.learning_rate).minimize(self.loss, global_step=self.global_step)
-        #self.optim = tf.train.RMSPropOptimizer(learning_rate=self.learning_rate, decay=0.9).minimize(self.loss, global_step=self.global_step)
+        # self.optim = tf.train.RMSPropOptimizer(learning_rate=self.learning_rate, decay=0.9).
+        # minimize(self.loss, global_step=self.global_step)
 
         tf.scalar_summary("loss", self.loss)
         tf.scalar_summary("rewards_mean", tf.reduce_mean(self.true_reward))
@@ -136,7 +137,7 @@ class DQN(Checkpointer):
 
         # Execute an action
         state_t1, reward_t, is_terminal = self.game.do(action_idx)
-        #print(action_idx, action_scores[0], state_t1, reward_t, is_terminal, len(self.memory), self.epsilon)
+        # print(action_idx, action_scores[0], state_t1, reward_t, is_terminal, len(self.memory), self.epsilon)
 
         # And save it in the experience replay memory
         self.memory.append((self.state_t, action_t, reward_t, state_t1, is_terminal))
@@ -155,24 +156,26 @@ class DQN(Checkpointer):
 
             # Predicted reward for next state
             y = []
-            pred_reward = self.action_scores.eval(feed_dict={self.input: s2})
-            for i in xrange(0, self.batch_size):
+            predicted_reward = self.action_scores.eval(feed_dict={self.input: s2})
+            for i in range(0, self.batch_size):
                 if terminal[i]:
-                    y.append(r[i])  # If terminal only equals reward
+                    # If terminal only equals current reward
+                    y.append(r[i])
                 else:
-                    y.append(r[i] + self.gamma * np.max(pred_reward[i]))  # Otherwise discounted reward of best action
+                    # Otherwise discounted future reward of best action
+                    y.append(r[i] + self.discount * np.max(predicted_reward[i]))
 
             write_summaries = step_no % 100 == 0
 
             # Run a training step in the network
             _, loss, summaries = self.sess.run([self.optim,
-                                        self.loss,
-                                        self.merged_sum if write_summaries else self.no_op],
-                                       feed_dict={
-                self.input: s,
-                self.true_reward: y,
-                self.actions: a
-            })
+                                                self.loss,
+                                                self.merged_sum if write_summaries else self.no_op],
+                                               feed_dict={
+                                                   self.input: s,
+                                                   self.true_reward: y,
+                                                   self.actions: a
+                                               })
 
             # Save checkpoint
             if step_no % 10000 == 0:
