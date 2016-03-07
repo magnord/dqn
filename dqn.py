@@ -61,20 +61,27 @@ class DQN(Checkpointer):
         # TODO: add namespace so multiple copies of network can be created
         observation = tf.placeholder(tf.float32, [None, self.observation_size], name='observation')
 
-        # hidden layers
-        W_fc1 = weight_variable('W_fc1', self.observation_size, layer_size)
-        b_fc1 = bias_variable('b_fc1', layer_size)
-        h_fc1 = tf.nn.relu(tf.matmul(observation, W_fc1) + b_fc1)
+        # Input layer
+        w_fc0 = weight_variable('W_fc0', self.observation_size, layer_size)
+        b_fc0 = bias_variable('b_fc0', layer_size)
+        h_fc0 = tf.nn.relu(tf.matmul(observation, w_fc0) + b_fc0)
 
-        W_fc2 = weight_variable('W_fc2', layer_size, self.num_actions)
+        # Hidden layer 1
+        w_fc1 = weight_variable('W_fc1', layer_size, layer_size)
+        b_fc1 = bias_variable('b_fc1', layer_size)
+        h_fc1 = tf.nn.relu(tf.matmul(h_fc0, w_fc1) + b_fc1)
+
+        # Hidden layer 2
+        w_fc2 = weight_variable('W_fc2', layer_size, self.num_actions)
         b_fc2 = bias_variable('b_fc2', self.num_actions)
 
-        action_scores = tf.matmul(h_fc1, W_fc2) + b_fc2
+        # Output
+        action_scores = tf.matmul(h_fc1, w_fc2) + b_fc2
 
         tf.histogram_summary("action_scores", action_scores)
         tf.scalar_summary("action_scores_mean", tf.reduce_mean(action_scores))
 
-        return observation, action_scores, h_fc1
+        return observation, action_scores
 
     def train(self):
         """Train a Deep Q Network.
@@ -85,7 +92,7 @@ class DQN(Checkpointer):
         self.actions = tf.placeholder(tf.float32, [self.batch_size, self.num_actions])
         self.true_reward = tf.placeholder(tf.float32, [self.batch_size])
 
-        self.input, self.action_scores, self.h_fc1 = self.build_model()
+        self.input, self.action_scores = self.build_model()
         # TODO: add target network
         self.action_reward = tf.reduce_sum(tf.mul(self.action_scores, self.actions), reduction_indices=1)
         self.loss = tf.reduce_sum(tf.square(self.true_reward - self.action_reward))
@@ -94,7 +101,7 @@ class DQN(Checkpointer):
         # minimize(self.loss, global_step=self.global_step)
 
         tf.scalar_summary("loss", self.loss)
-        tf.scalar_summary("rewards_mean", tf.reduce_mean(self.true_reward))
+        # tf.scalar_summary("rewards_mean", tf.reduce_mean(self.true_reward))
 
         action = np.zeros(self.num_actions)
         action[0] = 1
