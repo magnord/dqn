@@ -3,6 +3,7 @@ from builtins import *
 import time
 import random
 import math
+import os
 import numpy as np
 import tensorflow as tf
 from collections import deque
@@ -42,10 +43,11 @@ class DQN(Checkpointer):
         self.f = f
         self.num_actions = len(self.game.actions)
         self.observation_size = self.game.observation_size
+        self.repeat_action = f.repeat_action
 
-        self.attributes = ['learning_rate', 'final_epsilon', 'gamma', 'memory_size', 'batch_size']
-        self.checkpoint_dir = f.checkpoint_dir
-        self.log_dir = f.log_dir
+        self.attributes = ['learning_rate', 'final_epsilon', 'gamma', 'memory_size', 'batch_size', 'repeat_action']
+        self.checkpoint_dir = os.path.join('checkpoints', f.dir)
+        self.log_dir = os.path.join('logs', f.dir)
 
         if f.visualize:
             game.init_visualization()
@@ -145,7 +147,10 @@ class DQN(Checkpointer):
             self.epsilon -= (self.start_epsilon - self.final_epsilon) / (100 * self.observe)  # ?
 
         # Execute an action
-        state_t1, reward_t, is_terminal = self.game.do(action_idx)
+        for i in range(self.repeat_action):
+            state_t1 = self.game.do(action_idx)
+        reward_t = self.game.get_score()
+        is_terminal = self.game.terminal()
         # print(action_idx, action_scores[0], state_t1, reward_t, is_terminal, len(self.memory), self.epsilon)
 
         # And save it in the experience replay memory
@@ -188,7 +193,7 @@ class DQN(Checkpointer):
 
             # Save checkpoint
             if step_no % 10000 == 0:
-                self.save(self.f.checkpoint_dir, step_no)
+                self.save(self.checkpoint_dir, step_no)
 
             # Print progress
             if step_no % 100 == 0:

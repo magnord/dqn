@@ -136,7 +136,7 @@ class BadBallsGame(object):
             self.bxv[i] = random.uniform(-max_ball_speed, max_ball_speed)
             self.byv[i] = random.uniform(-max_ball_speed, max_ball_speed)
 
-        return self.observation(), self.get_score(), self.terminal()
+        return self.observation()
 
 
 # Shortest distance from line (x1,y1) - (x2,y2) to point (x, y)
