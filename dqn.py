@@ -103,6 +103,7 @@ class DQN(Checkpointer):
 
         self.start_time = time.time()
         start_iter = self.global_step.eval()
+        print('start_iter' + str(start_iter))
         final_step = start_iter + self.max_steps
 
         self.state_t = self.game.observation()
@@ -124,14 +125,15 @@ class DQN(Checkpointer):
         action_scores = self.sess.run([self.action_scores], feed_dict={self.input: np.expand_dims(self.state_t, axis=0)})
         action_t = np.zeros([self.num_actions])
 
-        # Epsilon greedy action selection
-        if random.random() <= self.epsilon or step_no <= self.observe:
+        # Epsilon greedy action selection (no random actions if checkpoint is loaded)
+        if not self.f.load_checkpoint and (random.random() <= self.epsilon or step_no <= self.observe):
             action_idx = random.randrange(0, self.num_actions)
         else:
             action_idx = np.argmax(action_scores[0])
 
         action_t[action_idx] = 1
 
+        # Decrease epsilon (TODO: Improve decreasing formula)
         if self.epsilon > self.final_epsilon and step_no > self.observe:
             self.epsilon -= (self.start_epsilon - self.final_epsilon) / (100 * self.observe)  # ?
 
@@ -145,7 +147,7 @@ class DQN(Checkpointer):
             self.memory.popleft()
 
         # Q-learning updates (mini-batched)
-        if step_no > self.observe:
+        if len(self.memory) > self.observe:  # Only train when we have enough data in replay memory
             batch = random.sample(self.memory, self.batch_size)
 
             s = [mem[0] for mem in batch]

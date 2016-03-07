@@ -10,7 +10,7 @@ Catch bouncing balls. Actions are 'up', 'down', 'left and 'right'.
 """
 
 force = 0.05  # Magnitude of force applied by action
-num_balls = 10
+num_balls = 20
 radius = 0.04
 max_x = 1.0
 max_y = 1.0

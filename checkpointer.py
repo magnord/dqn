@@ -39,8 +39,6 @@ class Checkpointer(object):
         if self.f.load_checkpoint:
             self.load(self.checkpoint_dir)
 
-        start_iter = self.global_step.eval()
-
     def load(self, checkpoint_dir):
         self.saver = tf.train.Saver()
 
@@ -50,8 +48,8 @@ class Checkpointer(object):
 
         ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
         if ckpt and ckpt.model_checkpoint_path:
-            ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
-            self.saver.restore(self.sess, os.path.join(checkpoint_dir, ckpt_name))
+            print('Loading from ' + ckpt.model_checkpoint_path)
+            self.saver.restore(self.sess, ckpt.model_checkpoint_path)
             print("Load success")
             return True
         else:
