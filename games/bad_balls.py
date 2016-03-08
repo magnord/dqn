@@ -128,7 +128,7 @@ class BadBallsGame(object):
         collision_idx = np.where(dist < radius)
         for i in collision_idx[0]:
             # Increase score and respawn ball
-            self.score += 1 if self.bt[i] == 0 else -1
+            self.score += 1 if self.bt[i] == 0 else -2
             # print(self.score)
             # print(self.observation())
             self.bx[i] = random.uniform(0.0, max_x)
