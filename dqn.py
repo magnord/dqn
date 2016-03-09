@@ -31,9 +31,8 @@ class DQN(Checkpointer):
         self.memory = deque()
         self.epsilon = self.start_epsilon = f.start_epsilon
         self.final_epsilon = f.final_epsilon
-        self.observe = 1000
+        self.final_epsilon_step = f.final_epsilon_step
         self.discount = 0.99  # Gamma
-        self.num_action_per_step = 1
         self.memory_size = f.memory_size
         self.batch_size = f.batch_size
         self.max_steps = f.max_steps
@@ -44,6 +43,7 @@ class DQN(Checkpointer):
         self.num_actions = len(self.game.actions)
         self.observation_size = self.game.observation_size
         self.repeat_action = f.repeat_action
+        self.observe = 1000 * f.repeat_action
 
         self.attributes = ['learning_rate', 'final_epsilon', 'gamma', 'memory_size', 'batch_size', 'repeat_action']
         self.checkpoint_dir = os.path.join('checkpoints', f.dir)
@@ -61,7 +61,7 @@ class DQN(Checkpointer):
         """
 
         layer_size = 128
-        # TODO: add namespace so multiple copies of network can be created
+        # TODO: move network definition to its own module
         with tf.variable_scope(namespace):
 
             observation = tf.placeholder(tf.float32, [None, self.observation_size], name='observation')
@@ -101,20 +101,17 @@ class DQN(Checkpointer):
         # Create primary neural network
         self.input, self.action_scores, self.network_last_hidden_layer = self.build_model('network')
         # Create target neural network
-        self.target_input, self.target_action_scores, self.target_network_last_hidden_layer = self.build_model('target_network')
-        # For debugging
-        # self.network_reduce = tf.reduce_sum(self.network_last_hidden_layer)
-        # self.target_network_reduce = tf.reduce_sum(self.target_network_last_hidden_layer)
+        self.target_input, self.target_action_scores, self.target_network_last_hidden_layer = \
+            self.build_model('target_network')
 
         self.action_reward = tf.reduce_sum(tf.mul(self.action_scores, self.actions), reduction_indices=1)
         self.loss = tf.reduce_sum(tf.square(self.true_reward - self.action_reward))  # TODO: Clip to (-1,1)?
+        tf.scalar_summary("loss", self.loss)
 
         # Optimizer
         self.optim = tf.train.AdamOptimizer(f.learning_rate).minimize(self.loss, global_step=self.global_step)
         # self.optim = tf.train.RMSPropOptimizer(learning_rate=self.learning_rate, decay=0.9).
         # minimize(self.loss, global_step=self.global_step)
-
-        tf.scalar_summary("loss", self.loss)
 
         # Update target network
         with tf.name_scope("target_network_update"):
@@ -133,9 +130,6 @@ class DQN(Checkpointer):
         self.tf_reward_ema = tf.placeholder(tf.float32, name='reward_ema')
         tf.scalar_summary("reward ema", self.tf_reward_ema)
 
-        action = np.zeros(self.num_actions)
-        action[0] = 1
-
         # Init checkpointing
         self.initialize()
 
@@ -147,43 +141,53 @@ class DQN(Checkpointer):
         print('start_iter: ' + str(self.start_iter))
         final_step = self.start_iter + self.max_steps
 
-        self.state_t = self.game.observation()
+        # Start simulation adn training
         print("Start")
+        self.state_t = self.game.observation()
+        # action = np.zeros(self.num_actions)
+        # action[0] = 1
+        self.step_no = self.start_iter
 
         if f.visualize:
             _ = FuncAnimation(self.game.fig, self.animate, interval=30)
             plt.show()
         else:
             # Simulation step without animation
-            for step_no in range(self.start_iter, final_step):
-                self.do_step(step_no)
+            while self.step_no <= final_step:
+                self.do_step()
 
     def animate(self, frame):
-        self.do_step(frame)
+        self.do_step()
         self.game.update_visualization()
 
-    def do_step(self, step_no):
-        action_scores = self.sess.run([self.action_scores], feed_dict={self.input: np.expand_dims(self.state_t, axis=0)})
-        action_t = np.zeros([self.num_actions])
+    def do_step(self):
+
+        # Calculate action scores for action selection
+        action_scores = self.sess.run([self.action_scores],
+                                      feed_dict={self.input: np.expand_dims(self.state_t, axis=0)})
 
         # Epsilon greedy action selection (no random actions if checkpoint is loaded)
-        if not self.f.load_checkpoint and (random.random() <= self.epsilon or step_no < self.observe):
+        if not self.f.load_checkpoint and (random.random() <= self.epsilon or self.step_no < self.observe):
             action_idx = random.randrange(0, self.num_actions)
         else:
             action_idx = np.argmax(action_scores[0])
 
+        action_t = np.zeros([self.num_actions])
         action_t[action_idx] = 1
 
-        # Decrease epsilon (TODO: Improve decreasing formula to include step_no)
-        if self.epsilon > self.final_epsilon and step_no > self.observe:
-            self.epsilon -= (self.start_epsilon - self.final_epsilon) / (1000 * self.observe)  # ?
 
-        # Execute an action
+        # Execute an action (1 or more times according to repeat_action setting)
+        reward_t = 0.0
         for i in range(self.repeat_action):
             state_t1 = self.game.do(action_idx)
-        reward_t = self.game.get_score()
+            reward_t += self.game.get_score()
+            self.reward_ema -= (1.0 - self.ema_decay) * (self.reward_ema - reward_t)
+            # Decrease epsilon
+            if self.epsilon > self.final_epsilon and self.step_no > self.observe:
+                self.epsilon -= (self.start_epsilon - self.final_epsilon) / self.final_epsilon_step
+            self.step_no += 1
         is_terminal = self.game.terminal()
-        self.reward_ema -= (1.0 - self.ema_decay) * (self.reward_ema - reward_t)
+
         # print(str(reward_t) + '=' + str(self.reward.eval()), end=' ')
         # print(action_idx, action_scores[0], state_t1, reward_t, is_terminal, len(self.memory), self.epsilon)
 
@@ -192,19 +196,18 @@ class DQN(Checkpointer):
         if len(self.memory) > self.memory_size:
             self.memory.popleft()
 
-        # Q-learning updates (mini-batched)
+        # Q-learning training (mini-batched)
         if len(self.memory) > self.observe:  # Only train when we have enough data in replay memory
             batch = random.sample(self.memory, self.batch_size)
 
             s = [mem[0] for mem in batch]
             a = [mem[1] for mem in batch]
             r = [mem[2] for mem in batch]
-            s2 = [mem[3] for mem in batch]
+            s_t1 = [mem[3] for mem in batch]
             terminal = [mem[4] for mem in batch]
 
-            # Predicted reward for next state
-            # Calculate action rewards using the target network
-            predicted_reward = self.target_action_scores.eval(feed_dict={self.target_input: s2})
+            # Predicted reward for next state calculated using the target network
+            predicted_reward = self.target_action_scores.eval(feed_dict={self.target_input: s_t1})
             y = []
             for i in range(0, self.batch_size):
                 if terminal[i]:
@@ -214,7 +217,7 @@ class DQN(Checkpointer):
                     # Otherwise discounted future reward of best action
                     y.append(r[i] + self.discount * np.max(predicted_reward[i]))
 
-            write_summaries = step_no % 100 == 0 and not self.f.no_logging and step_no >= self.observe
+            write_summaries = self.step_no % 100 == 0 and not self.f.no_logging and self.step_no >= self.observe
 
             # Run a training step in the network
             _, loss, summaries = self.sess.run([self.optim,
@@ -229,17 +232,20 @@ class DQN(Checkpointer):
                                                })
 
             # Save checkpoint
-            if step_no % 10000 == 0:
-                self.save(self.checkpoint_dir, step_no)
+            if self.step_no % 10000 == 0:
+                self.save(self.checkpoint_dir, self.step_no)
 
             # Update target network
-            if step_no % self.f.update_target_network == 0:
+            if self.step_no % self.f.update_target_network == 0:
                 self.sess.run(self.target_network_update)
 
             # Print progress
-            if step_no % 100 == 0:
-                n = step_no if not self.f.visualize else step_no + self.start_iter
-                print("Step: [%2d/%7d] time: %4.2f, loss: %.4f, ac.sc: %.4f, e: %.6f, reward ema: %.6f" % (
+            if self.step_no % 100 == 0:
+                n = self.step_no if not self.f.visualize else self.step_no + self.start_iter
+                if self.step_no < self.observe:
+                    print('Observing: [%2d/%7d]' % (n, self.max_steps))
+                else:
+                    print("Step: [%2d/%7d] time: %4.2f, loss: %.4f, ac.sc: %.4f, e: %.6f, reward ema: %.6f" % (
                     n,
                     self.max_steps,
                     time.time() - self.start_time,
@@ -247,11 +253,10 @@ class DQN(Checkpointer):
                     np.mean(action_scores[0]),
                     self.epsilon,
                     self.reward_ema))
-                # print('N: %f, TN: %f' % (self.sess.run(self.network_reduce), self.sess.run(self.target_network_reduce)))
 
             # Write summaries for Tensorboard
             if write_summaries:
-                self.writer.add_summary(summaries, step_no)
+                self.writer.add_summary(summaries, self.step_no)
 
         if is_terminal:
             _, _, _ = self.game.new_game()

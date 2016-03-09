@@ -87,15 +87,16 @@ class BadBallsGame(object):
         ball_type = np.zeros(num_rays)
         for i in range(num_rays):
             for j in range(num_balls):
+                # Calculate distance from ball to ray
                 d = line_point_dist(self.px,
                                     self.py,
                                     float(obs_ends_x[i]),
                                     float(obs_ends_y[i]),
                                     float(self.bx[j]),
                                     float(self.by[j]))
-                if d < dist[i]:
+                if d < dist[i]:  # TODO: Bug! d also needs to be less than ball radius!
                     dist[i] = d
-                    ball_type[i] = self.bt[j]
+                    ball_type[i] = self.bt[j]  # TODO: add velocity bxv and byv to observation
 
         return np.hstack((dist, ball_type))
 
