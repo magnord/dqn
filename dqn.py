@@ -62,6 +62,9 @@ class DQN(Checkpointer):
 
         layer_size = 128
         # TODO: move network definition to its own module
+        # TODO: Test layer size
+        # TODO: Do we need two fully connected layers for simple tasks? Gow much does it give?
+        # TODO: Test other non-linearities, e.g. tanh.
         with tf.variable_scope(namespace):
 
             observation = tf.placeholder(tf.float32, [None, self.observation_size], name='observation')
@@ -130,7 +133,7 @@ class DQN(Checkpointer):
         self.tf_reward_ema = tf.placeholder(tf.float32, name='reward_ema')
         tf.scalar_summary("reward ema", self.tf_reward_ema)
 
-        # Init checkpointing
+        # Init checkpointing and logging
         self.initialize()
 
         # Init target network
@@ -172,9 +175,9 @@ class DQN(Checkpointer):
         else:
             action_idx = np.argmax(action_scores[0])
 
+        # Set the selected action in a one-hot vector
         action_t = np.zeros([self.num_actions])
         action_t[action_idx] = 1
-
 
         # Execute an action (1 or more times according to repeat_action setting)
         reward_t = 0.0
@@ -183,6 +186,7 @@ class DQN(Checkpointer):
             reward_t += self.game.get_score()
             self.reward_ema -= (1.0 - self.ema_decay) * (self.reward_ema - reward_t)
             # Decrease epsilon
+            # TODO: Track epsilon in Tensorboard
             if self.epsilon > self.final_epsilon and self.step_no > self.observe:
                 self.epsilon -= (self.start_epsilon - self.final_epsilon) / self.final_epsilon_step
             self.step_no += 1
@@ -207,7 +211,9 @@ class DQN(Checkpointer):
             terminal = [mem[4] for mem in batch]
 
             # Predicted reward for next state calculated using the target network
+            # TODO: This could be moved into the TF graph. Is it worth it?
             predicted_reward = self.target_action_scores.eval(feed_dict={self.target_input: s_t1})
+            # TODO: Implement Double Q-Learning
             y = []
             for i in range(0, self.batch_size):
                 if terminal[i]:
@@ -242,10 +248,7 @@ class DQN(Checkpointer):
             # Print progress
             if self.step_no % 100 == 0:
                 n = self.step_no if not self.f.visualize else self.step_no + self.start_iter
-                if self.step_no < self.observe:
-                    print('Observing: [%2d/%7d]' % (n, self.max_steps))
-                else:
-                    print("Step: [%2d/%7d] time: %4.2f, loss: %.4f, ac.sc: %.4f, e: %.6f, reward ema: %.6f" % (
+                print("Step: [%2d/%7d] time: %4.2f, loss: %.4f, ac.sc: %.4f, e: %.6f, reward ema: %.6f" % (
                     n,
                     self.max_steps,
                     time.time() - self.start_time,

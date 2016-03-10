@@ -47,7 +47,7 @@ class BadBallsGame(object):
         self.name = "bad_balls"
         self.actions = ['up', 'down', 'left', 'right']
         self.action_forces = [(0.0, -force), (0.0, force), (-force, 0.0), (force, 0.0)]
-        self.observation_size = 2 * num_rays
+        self.observation_size = 4 * num_rays
         _, _, _ = self.new_game()
 
     def init_visualization(self):
@@ -83,8 +83,10 @@ class BadBallsGame(object):
         obs_ends_x = self.px + lx
         obs_ends_y = self.py + ly
         dist = np.empty(num_rays);
-        dist.fill(10.0)  # No observation = distance: 10
+        dist.fill(2.0)  # No observation = distance: 2
         ball_type = np.zeros(num_rays)
+        ball_xv = np.zeros(num_rays)
+        ball_yv = np.zeros(num_rays)
         for i in range(num_rays):
             for j in range(num_balls):
                 # Calculate distance from ball to ray
@@ -94,11 +96,13 @@ class BadBallsGame(object):
                                     float(obs_ends_y[i]),
                                     float(self.bx[j]),
                                     float(self.by[j]))
-                if d < dist[i]:  # TODO: Bug! d also needs to be less than ball radius!
-                    dist[i] = d
-                    ball_type[i] = self.bt[j]  # TODO: add velocity bxv and byv to observation
+                if d < radius and d < dist[i]:  # Ball distance to ray less than ball radius and smallest seen so far
+                    dist[i] = d                 # Distance to closest ball
+                    ball_type[i] = self.bt[j]   # Type of the closest ball
+                    ball_xv[i] = self.bxv[j]    # Velocity of closest ball
+                    ball_yv[i] = self.byv[j]
 
-        return np.hstack((dist, ball_type))
+        return np.hstack((dist, ball_type, ball_xv, ball_yv))
 
     def do(self, action_idx):
         # Update balls
@@ -129,7 +133,7 @@ class BadBallsGame(object):
         collision_idx = np.where(dist < radius)
         for i in collision_idx[0]:
             # Increase score and respawn ball
-            self.score += 1 if self.bt[i] == 0 else -2
+            self.score += 1 if self.bt[i] == 0 else -5
             # print(self.score)
             # print(self.observation())
             self.bx[i] = random.uniform(0.0, max_x)
