@@ -75,7 +75,7 @@ class BallsGame(object):
         ly = ray_length * np.sin(angles)
         obs_ends_x = self.px + lx
         obs_ends_y = self.py + ly
-        dist = np.empty(self.observation_size);
+        dist = np.empty(self.observation_size)
         dist.fill(10)  # No observation = distance: 10
         for i in range(self.observation_size):
             for j in range(num_balls):

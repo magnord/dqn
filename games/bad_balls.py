@@ -82,7 +82,7 @@ class BadBallsGame(object):
         ly = ray_length * np.sin(angles)
         obs_ends_x = self.px + lx
         obs_ends_y = self.py + ly
-        dist = np.empty(num_rays);
+        dist = np.empty(num_rays)
         dist.fill(2.0)  # No observation = distance: 2
         ball_type = np.zeros(num_rays)
         ball_xv = np.zeros(num_rays)

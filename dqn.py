@@ -69,6 +69,7 @@ class DQN(Checkpointer):
         # TODO: Test layer size
         # TODO: Do we need two fully connected layers for simple tasks? Gow much does it give?
         # TODO: Test other non-linearities, e.g. tanh.
+        # TODO: Implement dueling network architecture
         with tf.variable_scope(namespace):
 
             observation = tf.placeholder(tf.float32, [None, self.observation_size], name='observation')
@@ -231,11 +232,9 @@ class DQN(Checkpointer):
                 # TODO: Try out dynamic discount
                 ys = []
                 for i in range(0, self.batch_size):
-                    if terminal[i]:
-                        # If terminal only equals current reward
+                    if terminal[i]:  # If terminal only equals current reward
                         y = r[i]
-                    else:
-                        # Otherwise discounted future reward of best action
+                    else:  # Otherwise discounted future reward of best action
                         y = r[i] + self.discount * np.max(predicted_reward[i])
                     ys.append(y)
 
@@ -254,7 +253,7 @@ class DQN(Checkpointer):
                                                    })
 
                 # Save checkpoint
-                if self.step_no % 10000 == 0:
+                if self.step_no % 50000 == 0:
                     self.save(self.checkpoint_dir, self.step_no)
 
                 # Update target network
