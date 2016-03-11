@@ -1,14 +1,18 @@
 from __future__ import print_function
-from builtins import *
-import time
-import random
+
+import datetime
 import math
 import os
+import random
+import time
+from builtins import *
+from collections import deque
+
+import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-from collections import deque
 from matplotlib.animation import FuncAnimation
-import matplotlib.pyplot as plt
+
 from checkpointer import Checkpointer
 
 
@@ -112,6 +116,7 @@ class DQN(Checkpointer):
         tf.scalar_summary("loss", self.loss)
 
         # Optimizer
+        # TODO: Clip gradients to 10 (as in Double DQN article)?
         self.optim = tf.train.AdamOptimizer(f.learning_rate).minimize(self.loss, global_step=self.global_step)
         # self.optim = tf.train.RMSPropOptimizer(learning_rate=self.learning_rate, decay=0.9).
         # minimize(self.loss, global_step=self.global_step)
@@ -147,8 +152,7 @@ class DQN(Checkpointer):
         # Start simulation adn training
         print("Start")
         self.state_t = self.game.observation()
-        # action = np.zeros(self.num_actions)
-        # action[0] = 1
+        self.total_reward = 0
         self.step_no = self.start_iter
 
         if f.visualize:
@@ -192,74 +196,86 @@ class DQN(Checkpointer):
             self.step_no += 1
         is_terminal = self.game.terminal()
 
+        # Print accumulated score during replay
+        if reward_t != 0 and self.f.load_checkpoint:
+            self.total_reward += reward_t
+            print('{!s}: reward: {:+.0f}, total: {: .0f}'.format(
+                datetime.timedelta(seconds=int(time.time() - self.start_time)),
+                reward_t,
+                self.total_reward))
+
         # print(str(reward_t) + '=' + str(self.reward.eval()), end=' ')
         # print(action_idx, action_scores[0], state_t1, reward_t, is_terminal, len(self.memory), self.epsilon)
 
-        # And save it in the experience replay memory
-        self.memory.append((self.state_t, action_t, reward_t, state_t1, is_terminal))
-        if len(self.memory) > self.memory_size:
-            self.memory.popleft()
+        if not self.f.load_checkpoint:  # Don't train if we have loaded a checkpoint
 
-        # Q-learning training (mini-batched)
-        if len(self.memory) > self.observe:  # Only train when we have enough data in replay memory
-            batch = random.sample(self.memory, self.batch_size)
+            # And save it in the experience replay memory
+            self.memory.append((self.state_t, action_t, reward_t, state_t1, is_terminal))
+            if len(self.memory) > self.memory_size:
+                self.memory.popleft()
 
-            s = [mem[0] for mem in batch]
-            a = [mem[1] for mem in batch]
-            r = [mem[2] for mem in batch]
-            s_t1 = [mem[3] for mem in batch]
-            terminal = [mem[4] for mem in batch]
+            # Q-learning training (mini-batched)
+            if len(self.memory) > self.observe:  # Only train when we have enough data in replay memory
+                batch = random.sample(self.memory, self.batch_size)
 
-            # Predicted reward for next state calculated using the target network
-            # TODO: This could be moved into the TF graph. Is it worth it?
-            predicted_reward = self.target_action_scores.eval(feed_dict={self.target_input: s_t1})
-            # TODO: Implement Double Q-Learning
-            y = []
-            for i in range(0, self.batch_size):
-                if terminal[i]:
-                    # If terminal only equals current reward
-                    y.append(r[i])
-                else:
-                    # Otherwise discounted future reward of best action
-                    y.append(r[i] + self.discount * np.max(predicted_reward[i]))
+                s = [mem[0] for mem in batch]
+                a = [mem[1] for mem in batch]
+                r = [mem[2] for mem in batch]
+                s_t1 = [mem[3] for mem in batch]
+                terminal = [mem[4] for mem in batch]
 
-            write_summaries = self.step_no % 100 == 0 and not self.f.no_logging and self.step_no >= self.observe
+                # Predicted reward for next state calculated using the target network
+                # TODO: This could be moved into the TF graph. Is it worth it?
+                predicted_reward = self.target_action_scores.eval(feed_dict={self.target_input: s_t1})
+                # TODO: Implement Double Q-Learning
+                # TODO: Try out dynamic discount
+                ys = []
+                for i in range(0, self.batch_size):
+                    if terminal[i]:
+                        # If terminal only equals current reward
+                        y = r[i]
+                    else:
+                        # Otherwise discounted future reward of best action
+                        y = r[i] + self.discount * np.max(predicted_reward[i])
+                    ys.append(y)
 
-            # Run a training step in the network
-            _, loss, summaries = self.sess.run([self.optim,
-                                                self.loss,
-                                                self.merged_summaries if write_summaries else self.no_op],
-                                               feed_dict={
-                                                   self.input: s,
-                                                   self.target_input: s,  # Just for summaries to work
-                                                   self.true_reward: y,   # Q from target network!
-                                                   self.actions: a,
-                                                   self.tf_reward_ema: self.reward_ema  # Reward moving average
-                                               })
+                write_summaries = self.step_no % 100 == 0 and not self.f.no_logging and self.step_no >= self.observe
 
-            # Save checkpoint
-            if self.step_no % 10000 == 0:
-                self.save(self.checkpoint_dir, self.step_no)
+                # Run a training step in the network
+                _, loss, summaries = self.sess.run([self.optim,
+                                                    self.loss,
+                                                    self.merged_summaries if write_summaries else self.no_op],
+                                                   feed_dict={
+                                                       self.input: s,
+                                                       self.target_input: s,  # Just for summaries to work
+                                                       self.true_reward: ys,   # Q from target network!
+                                                       self.actions: a,
+                                                       self.tf_reward_ema: self.reward_ema  # Reward moving average
+                                                   })
 
-            # Update target network
-            if self.step_no % self.f.update_target_network == 0:
-                self.sess.run(self.target_network_update)
+                # Save checkpoint
+                if self.step_no % 10000 == 0:
+                    self.save(self.checkpoint_dir, self.step_no)
 
-            # Print progress
-            if self.step_no % 100 == 0:
-                n = self.step_no if not self.f.visualize else self.step_no + self.start_iter
-                print("Step: [%2d/%7d] time: %4.2f, loss: %.4f, ac.sc: %.4f, e: %.6f, reward ema: %.6f" % (
-                    n,
-                    self.max_steps,
-                    time.time() - self.start_time,
-                    loss,
-                    np.mean(action_scores[0]),
-                    self.epsilon,
-                    self.reward_ema))
+                # Update target network
+                if self.step_no % self.f.update_target_network == 0:
+                    self.sess.run(self.target_network_update)
 
-            # Write summaries for Tensorboard
-            if write_summaries:
-                self.writer.add_summary(summaries, self.step_no)
+                # Print progress
+                if self.step_no % 100 == 0:
+                    n = self.step_no if not self.f.visualize else self.step_no + self.start_iter
+                    print("Step: [%2d/%7d] time: %4.2f, loss: %.4f, ac.sc: %.4f, e: %.6f, reward ema: %.6f" % (
+                        n,
+                        self.max_steps,
+                        time.time() - self.start_time,
+                        loss,
+                        np.mean(action_scores[0]),
+                        self.epsilon,
+                        self.reward_ema))
+
+                # Write summaries for Tensorboard
+                if write_summaries:
+                    self.writer.add_summary(summaries, self.step_no)
 
         if is_terminal:
             _, _, _ = self.game.new_game()

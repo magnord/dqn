@@ -16,7 +16,7 @@ flags.DEFINE_integer("final_epsilon_step", 500000, "How many steps until final e
 flags.DEFINE_integer("batch_size", 512, "The size of mini batches [512]")
 flags.DEFINE_integer("memory_size", 100000, "The size of the experience replay memory [100000]")
 flags.DEFINE_integer("repeat_action", 1, "The size of the experience replay memory [1]")
-flags.DEFINE_integer("update_target_network", 5000, "Copy primary network to target network every X steps [5000]")
+flags.DEFINE_integer("update_target_network", 10000, "Copy primary network to target network every X steps [10000]")
 flags.DEFINE_string("game_name", "game", "The name of game [game]")
 flags.DEFINE_string("dir", "default", "Sub-directory to save checkpoints and logs for this training run [default]")
 flags.DEFINE_boolean("no_logging", False, "Do not log any summaries [False]")
@@ -24,6 +24,7 @@ flags.DEFINE_boolean("forward_only", False, "True for forward only, False for tr
 flags.DEFINE_boolean("visualize", False, "Visualize the game [False]")
 flags.DEFINE_boolean("load_checkpoint", False, "Load previous checkpoint [False]")
 
+# TODO: Add asserts that validate flags
 
 def main(_):
     pp.pprint(flags.FLAGS.__flags)

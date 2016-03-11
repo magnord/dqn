@@ -45,8 +45,8 @@ class BadBallsGame(object):
 
     def __init__(self):
         self.name = "bad_balls"
-        self.actions = ['up', 'down', 'left', 'right']
-        self.action_forces = [(0.0, -force), (0.0, force), (-force, 0.0), (force, 0.0)]
+        self.actions = ['noop', 'up', 'down', 'left', 'right']
+        self.action_forces = [(0.0, 0.0), (0.0, -force), (0.0, force), (-force, 0.0), (force, 0.0)]
         self.observation_size = 4 * num_rays
         _, _, _ = self.new_game()
 
