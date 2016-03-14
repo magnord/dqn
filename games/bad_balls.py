@@ -87,6 +87,7 @@ class BadBallsGame(object):
         ball_type = np.zeros(num_rays)
         ball_xv = np.zeros(num_rays)
         ball_yv = np.zeros(num_rays)
+        # TODO: Calculate distance and angle to each ball, then observe the closest ball in that "ray sector"
         for i in range(num_rays):
             for j in range(num_balls):
                 # Calculate distance from ball to ray
@@ -102,6 +103,7 @@ class BadBallsGame(object):
                     ball_xv[i] = self.bxv[j]    # Velocity of closest ball
                     ball_yv[i] = self.byv[j]
 
+        # TODO: Add player x,y to observation (will help with walls)
         return np.hstack((dist, ball_type, ball_xv, ball_yv))
 
     def do(self, action_idx):

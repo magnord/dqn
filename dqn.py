@@ -16,16 +16,6 @@ from matplotlib.animation import FuncAnimation
 from checkpointer import Checkpointer
 
 
-def weight_variable(name, input_size, output_size):
-    xavier = -6.0 / math.sqrt(input_size + output_size)
-    initializer = tf.random_uniform_initializer(-xavier, xavier)
-    return tf.get_variable(name, (input_size, output_size), initializer=initializer)
-
-
-def bias_variable(name, size):
-    return tf.get_variable(name, (size,), initializer=tf.constant_initializer(0))
-
-
 class DQN(Checkpointer):
     """Deep Neural Netwok
     """
@@ -41,6 +31,7 @@ class DQN(Checkpointer):
         self.batch_size = f.batch_size
         self.max_steps = f.max_steps
         self.learning_rate = f.learning_rate
+        self.ddqn = f.ddqn
 
         self.game = game
         self.f = f
@@ -49,52 +40,12 @@ class DQN(Checkpointer):
         self.repeat_action = f.repeat_action
         self.observe = 1000 * f.repeat_action
 
-        self.attributes = ['learning_rate', 'final_epsilon', 'gamma', 'memory_size', 'batch_size', 'repeat_action']
+        self.attributes = ['learning_rate', 'final_epsilon', 'gamma', 'memory_size', 'batch_size', 'repeat_action', 'ddqn']
         self.checkpoint_dir = os.path.join('checkpoints', f.dir)
         self.log_dir = os.path.join('logs', f.dir)
 
         if f.visualize:
             game.init_visualization()
-
-    def build_model(self, namespace):
-        """Model that implements actiion function that can take in observation vector or a batch
-            and returns scores (of unbounded values) for each action for each observation.
-            input shape:  [batch_size, observation_size]
-            output shape: [batch_size, num_actions]
-            :param namespace: The name space of this network
-        """
-
-        layer_size = 128
-        # TODO: move network definition to its own module
-        # TODO: Test layer size
-        # TODO: Do we need two fully connected layers for simple tasks? Gow much does it give?
-        # TODO: Test other non-linearities, e.g. tanh.
-        # TODO: Implement dueling network architecture
-        with tf.variable_scope(namespace):
-
-            observation = tf.placeholder(tf.float32, [None, self.observation_size], name='observation')
-
-            # Input layer
-            w_fc0 = weight_variable('W_fc0', self.observation_size, layer_size)
-            b_fc0 = bias_variable('b_fc0', layer_size)
-            h_fc0 = tf.nn.relu(tf.matmul(observation, w_fc0) + b_fc0)
-
-            # Hidden layer 1
-            w_fc1 = weight_variable('W_fc1', layer_size, layer_size)
-            b_fc1 = bias_variable('b_fc1', layer_size)
-            h_fc1 = tf.nn.relu(tf.matmul(h_fc0, w_fc1) + b_fc1)
-
-            # Hidden layer 2
-            w_fc2 = weight_variable('W_fc2', layer_size, self.num_actions)
-            b_fc2 = bias_variable('b_fc2', self.num_actions)
-
-            # Output
-            action_scores = tf.matmul(h_fc1, w_fc2) + b_fc2
-
-            # tf.histogram_summary(action_scores.name, action_scores)
-            tf.scalar_summary(namespace + "/action_score_mean", tf.reduce_mean(action_scores))
-
-            return observation, action_scores, w_fc2
 
     def train(self):
         """Train a Deep Q Network.
@@ -107,10 +58,11 @@ class DQN(Checkpointer):
         self.true_reward = tf.placeholder(tf.float32, [self.batch_size])  # True reward (y) in Q-learning
 
         # Create primary neural network
-        self.input, self.action_scores, self.network_last_hidden_layer = self.build_model('network')
+        self.input, self.action_scores, self.network_last_hidden_layer = build_model(self.observation_size,
+                                                                                     self.num_actions, 'network')
         # Create target neural network
         self.target_input, self.target_action_scores, self.target_network_last_hidden_layer = \
-            self.build_model('target_network')
+            build_model(self.observation_size, self.num_actions, 'target_network')
 
         self.action_reward = tf.reduce_sum(tf.mul(self.action_scores, self.actions), reduction_indices=1)
         self.loss = tf.reduce_sum(tf.square(self.true_reward - self.action_reward))  # TODO: Clip to (-1,1)?
@@ -227,15 +179,26 @@ class DQN(Checkpointer):
 
                 # Predicted reward for next state calculated using the target network
                 # TODO: This could be moved into the TF graph. Is it worth it?
-                predicted_reward = self.target_action_scores.eval(feed_dict={self.target_input: s_t1})
-                # TODO: Implement Double Q-Learning
+                target_reward = self.target_action_scores.eval(feed_dict={self.target_input: s_t1})
+
+                # If Double Q-Learning
+                # Select action with primary network, but calculate action value with target network
+                if self.ddqn:
+                    predicted_reward = self.action_scores.eval(feed_dict={self.input: s_t1})
+
                 # TODO: Try out dynamic discount
                 ys = []
                 for i in range(0, self.batch_size):
                     if terminal[i]:  # If terminal only equals current reward
                         y = r[i]
                     else:  # Otherwise discounted future reward of best action
-                        y = r[i] + self.discount * np.max(predicted_reward[i])
+                        if self.ddqn:
+                            # Double DQN action value
+                            ddqn_action_idx = np.argmax(predicted_reward[i])
+                            y = r[i] + self.discount * target_reward[i][ddqn_action_idx]
+                        else:
+                            # Ordinary DQN reward
+                            y = r[i] + self.discount * np.max(target_reward[i])
                     ys.append(y)
 
                 write_summaries = self.step_no % 100 == 0 and not self.f.no_logging and self.step_no >= self.observe
@@ -280,3 +243,55 @@ class DQN(Checkpointer):
             _, _, _ = self.game.new_game()
 
         self.state_t = state_t1
+
+
+def build_model(observation_size, num_actions, namespace):
+    """Model that implements actiion function that can take in observation vector or a batch
+        and returns scores (of unbounded values) for each action for each observation.
+        input shape:  [batch_size, observation_size]
+        output shape: [batch_size, num_actions]
+        :param namespace: The name space of this network
+    """
+
+    layer_size = 128
+    # TODO: move network definition to its own module
+    # TODO: Test layer size
+    # TODO: Do we need two fully connected layers for simple tasks? Gow much does it give?
+    # TODO: Test other non-linearities, e.g. tanh.
+    # TODO: Implement dueling network architecture
+    with tf.variable_scope(namespace):
+
+        observation = tf.placeholder(tf.float32, [None, observation_size], name='observation')
+
+        # Input layer
+        w_fc0 = weight_variable('W_fc0', observation_size, layer_size)
+        b_fc0 = bias_variable('b_fc0', layer_size)
+        h_fc0 = tf.nn.relu(tf.matmul(observation, w_fc0) + b_fc0)
+
+        # Hidden layer 1
+        w_fc1 = weight_variable('W_fc1', layer_size, layer_size)
+        b_fc1 = bias_variable('b_fc1', layer_size)
+        h_fc1 = tf.nn.relu(tf.matmul(h_fc0, w_fc1) + b_fc1)
+
+        # Hidden layer 2
+        w_fc2 = weight_variable('W_fc2', layer_size, num_actions)
+        b_fc2 = bias_variable('b_fc2', num_actions)
+
+        # Output
+        action_scores = tf.matmul(h_fc1, w_fc2) + b_fc2
+
+        # tf.histogram_summary(action_scores.name, action_scores)
+        tf.scalar_summary(namespace + "/action_score_mean", tf.reduce_mean(action_scores))
+
+        return observation, action_scores, w_fc2
+
+
+def weight_variable(name, input_size, output_size):
+    xavier = -6.0 / math.sqrt(input_size + output_size)
+    initializer = tf.random_uniform_initializer(-xavier, xavier)
+    return tf.get_variable(name, (input_size, output_size), initializer=initializer)
+
+
+def bias_variable(name, size):
+    return tf.get_variable(name, (size,), initializer=tf.constant_initializer(0))
+
