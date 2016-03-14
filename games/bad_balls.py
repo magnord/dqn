@@ -19,6 +19,9 @@ max_y = 1.0
 max_ball_speed = 0.005
 ray_length = 0.5
 num_rays = 16
+angles = np.linspace(0.0, 2*np.pi, num_rays, endpoint=False)
+lx = ray_length * np.cos(angles)
+ly = ray_length * np.sin(angles)
 
 
 def create_balls():
@@ -48,6 +51,7 @@ class BadBallsGame(object):
         self.actions = ['noop', 'up', 'down', 'left', 'right']
         self.action_forces = [(0.0, 0.0), (0.0, -force), (0.0, force), (-force, 0.0), (force, 0.0)]
         self.observation_size = 4 * num_rays
+
         _, _, _ = self.new_game()
 
     def init_visualization(self):
@@ -77,9 +81,6 @@ class BadBallsGame(object):
 
     def observation(self):
         # Do raycasting to observe balls
-        angles = np.linspace(0.0, 2*np.pi, num_rays, endpoint=False)
-        lx = ray_length * np.cos(angles)
-        ly = ray_length * np.sin(angles)
         obs_ends_x = self.px + lx
         obs_ends_y = self.py + ly
         dist = np.empty(num_rays)
@@ -87,9 +88,11 @@ class BadBallsGame(object):
         ball_type = np.zeros(num_rays)
         ball_xv = np.zeros(num_rays)
         ball_yv = np.zeros(num_rays)
+        dist_to_balls = np.sqrt(np.square(self.bx - self.px) + np.square(self.by - self.py))
+        relevant_balls = np.where(dist_to_balls < ray_length)[0]
         # TODO: Calculate distance and angle to each ball, then observe the closest ball in that "ray sector"
         for i in range(num_rays):
-            for j in range(num_balls):
+            for j in list(relevant_balls):
                 # Calculate distance from ball to ray
                 d = line_point_dist(self.px,
                                     self.py,
@@ -103,7 +106,7 @@ class BadBallsGame(object):
                     ball_xv[i] = self.bxv[j]    # Velocity of closest ball
                     ball_yv[i] = self.byv[j]
 
-        # TODO: Add player x,y to observation (will help with walls)
+        # TODO: Add player x,y,xv,yv to observation (will help with walls)
         return np.hstack((dist, ball_type, ball_xv, ball_yv))
 
     def do(self, action_idx):
