@@ -201,7 +201,7 @@ class DQN(Checkpointer):
                             y = r[i] + self.discount * np.max(target_reward[i])
                     ys.append(y)
 
-                write_summaries = self.step_no % 100 == 0 and not self.f.no_logging and self.step_no >= self.observe
+                write_summaries = self.step_no % 100 == 0 and not self.f.load_checkpoint and self.step_no >= self.observe
 
                 # Run a training step in the network
                 _, loss, summaries = self.sess.run([self.optim,

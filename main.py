@@ -19,12 +19,12 @@ flags.DEFINE_integer("repeat_action", 4, "The size of the experience replay memo
 flags.DEFINE_integer("update_target_network", 10000, "Copy primary network to target network every X steps [10000]")
 flags.DEFINE_string("game_name", "game", "The name of game [game]")
 flags.DEFINE_string("dir", "default", "Sub-directory to save checkpoints and logs for this training run [default]")
-flags.DEFINE_boolean("no_logging", False, "Do not log any summaries [False]")
 flags.DEFINE_boolean("ddqn", True, "Enable Double Q-Learning [True]")
 flags.DEFINE_boolean("visualize", False, "Visualize the game [False]")
 flags.DEFINE_boolean("load_checkpoint", False, "Load previous checkpoint [False]")
 
 # TODO: Add asserts that validate flags
+
 
 def main(_):
     pp.pprint(flags.FLAGS.__flags)

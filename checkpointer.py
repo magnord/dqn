@@ -32,7 +32,7 @@ class Checkpointer(object):
 
     def initialize(self):
         self.no_op = tf.no_op()  # Used instead of merged_sum when no summaries are needed
-        if not self.f.no_logging:
+        if not self.f.load_checkpoint:
             self.merged_summaries = tf.merge_all_summaries()
             final_log_dir = os.path.join(self.log_dir, self.get_model_dir())
             if not os.path.exists(final_log_dir):
@@ -41,7 +41,7 @@ class Checkpointer(object):
 
         tf.initialize_all_variables().run()
 
-        if not self.f.no_logging:
+        if not self.f.load_checkpoint:
             self.writer.add_graph(self.sess.graph_def)
 
         if self.f.load_checkpoint:
