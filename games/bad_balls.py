@@ -50,7 +50,7 @@ class BadBallsGame(object):
         self.name = "bad_balls"
         self.actions = ['noop', 'up', 'down', 'left', 'right']
         self.action_forces = [(0.0, 0.0), (0.0, -force), (0.0, force), (-force, 0.0), (force, 0.0)]
-        self.observation_size = 4 * num_rays
+        self.observation_size = 4 * num_rays + 4
 
         _, _, _ = self.new_game()
 
@@ -88,8 +88,8 @@ class BadBallsGame(object):
         ball_type = np.zeros(num_rays)
         ball_xv = np.zeros(num_rays)
         ball_yv = np.zeros(num_rays)
-        dist_to_balls = np.sqrt(np.square(self.bx - self.px) + np.square(self.by - self.py))
-        relevant_balls = np.where(dist_to_balls < ray_length)[0]
+        squared_dist_to_balls = np.square(self.bx - self.px) + np.square(self.by - self.py)
+        relevant_balls = np.where(squared_dist_to_balls < ray_length * ray_length)[0]
         # TODO: Calculate distance and angle to each ball, then observe the closest ball in that "ray sector"
         for i in range(num_rays):
             for j in list(relevant_balls):
@@ -107,7 +107,7 @@ class BadBallsGame(object):
                     ball_yv[i] = self.byv[j]
 
         # TODO: Add player x,y,xv,yv to observation (will help with walls)
-        return np.hstack((dist, ball_type, ball_xv, ball_yv))
+        return np.hstack(([self.px, self.py, self.pxv, self.pyv], dist, ball_type, ball_xv, ball_yv))
 
     def do(self, action_idx):
         # Update balls
