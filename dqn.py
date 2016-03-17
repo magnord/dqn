@@ -22,7 +22,7 @@ class DQN(Checkpointer):
 
     def __init__(self, sess, game, f):
         self.sess = sess
-        self.memory = deque()
+        self.memory = deque()  # TODO: Use fixed size deque
         self.epsilon = self.start_epsilon = f.start_epsilon
         self.final_epsilon = f.final_epsilon
         self.final_epsilon_step = f.final_epsilon_step
@@ -65,7 +65,7 @@ class DQN(Checkpointer):
             build_model(self.observation_size, self.num_actions, 'target_network')
 
         self.action_reward = tf.reduce_sum(tf.mul(self.action_scores, self.actions), reduction_indices=1)
-        self.loss = tf.reduce_sum(tf.square(self.true_reward - self.action_reward))  # TODO: Clip to (-1,1)?
+        self.loss = tf.reduce_sum(tf.square(self.true_reward - self.action_reward))  # TODO: Clip to (-1,1)? Sounds too drastic.
         tf.scalar_summary("loss", self.loss)
 
         # Optimizer
@@ -170,6 +170,7 @@ class DQN(Checkpointer):
             # Q-learning training (mini-batched)
             if len(self.memory) > self.observe:  # Only train when we have enough data in replay memory
                 batch = random.sample(self.memory, self.batch_size)
+                # TODO: Is this slow for large memory sizes? Yes. Random access to deque is O(N).
 
                 s = [mem[0] for mem in batch]
                 a = [mem[1] for mem in batch]
@@ -259,6 +260,8 @@ def build_model(observation_size, num_actions, namespace):
     # TODO: Do we need two fully connected layers for simple tasks? Gow much does it give?
     # TODO: Test other non-linearities, e.g. tanh.
     # TODO: Implement dueling network architecture
+    # TODO: Add summaries for weights, biases and gradients
+    # TODO: Add LSTM layer
     with tf.variable_scope(namespace):
 
         observation = tf.placeholder(tf.float32, [None, observation_size], name='observation')

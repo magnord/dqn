@@ -50,7 +50,7 @@ class BadBallsGame(object):
         self.name = "bad_balls"
         self.actions = ['noop', 'up', 'down', 'left', 'right']
         self.action_forces = [(0.0, 0.0), (0.0, -force), (0.0, force), (-force, 0.0), (force, 0.0)]
-        self.observation_size = 4 * num_rays + 4
+        self.observation_size = 2 * 3 * num_rays + 4
 
         _, _, _ = self.new_game()
 
@@ -83,20 +83,22 @@ class BadBallsGame(object):
         # Do raycasting to observe balls
         obs_ends_x = self.px + lx
         obs_ends_y = self.py + ly
-        dist = np.empty(num_rays)
-        dist.fill(2.0)  # No observation = distance: 2
-        ball_type = np.zeros(num_rays)
-        ball_xv = np.zeros(num_rays)
-        ball_yv = np.zeros(num_rays)
+        dist_good = np.empty(num_rays)
+        dist_good.fill(max_x * 2.0)  # No observation = 2 * world size
+        dist_bad = np.empty(num_rays)
+        dist_bad.fill(max_x * 2.0)
+        good_ball_xv = np.zeros(num_rays)
+        good_ball_yv = np.zeros(num_rays)
+        bad_ball_xv = np.zeros(num_rays)
+        bad_ball_yv = np.zeros(num_rays)
         squared_dist_to_balls = np.square(self.bx - self.px) + np.square(self.by - self.py)
         relevant_balls = np.where(squared_dist_to_balls < ray_length * ray_length)[0]
-        # relevant_good_balls = relevant_balls[relevant_balls >= num_bad_balls]
-        # relevant_bad_balls = relevant_balls[relevant_balls < num_bad_balls]
+        relevant_good_balls = relevant_balls[relevant_balls >= num_bad_balls]
+        relevant_bad_balls = relevant_balls[relevant_balls < num_bad_balls]
         # print((relevant_balls, relevant_good_balls, relevant_bad_balls))
-        # TODO: Use two 'layers' of rays, one for good balls and one for bad, and skip ball type
         # TODO: Calculate distance and angle to each ball, then observe the closest ball in that "ray sector"
         for i in range(num_rays):
-            for j in list(relevant_balls):
+            for j in list(relevant_good_balls):
                 # Calculate distance from ball to ray
                 d = line_point_dist(self.px,
                                     self.py,
@@ -104,13 +106,27 @@ class BadBallsGame(object):
                                     float(obs_ends_y[i]),
                                     float(self.bx[j]),
                                     float(self.by[j]))
-                if d < radius and d < dist[i]:  # Ball distance to ray less than ball radius and smallest seen so far
-                    dist[i] = d                 # Distance to closest ball
-                    ball_type[i] = self.bt[j]   # Type of the closest ball
-                    ball_xv[i] = self.bxv[j]    # Velocity of closest ball
-                    ball_yv[i] = self.byv[j]
+                if d < radius and d < dist_good[i]:  # Ball distance to ray less than ball radius and smallest so far
+                    dist_good[i] = d                 # Distance to closest ball
+                    good_ball_xv[i] = self.bxv[j]    # Velocity of closest ball
+                    good_ball_yv[i] = self.byv[j]
+            for j in list(relevant_bad_balls):
+                # Calculate distance from ball to ray
+                d = line_point_dist(self.px,
+                                    self.py,
+                                    float(obs_ends_x[i]),
+                                    float(obs_ends_y[i]),
+                                    float(self.bx[j]),
+                                    float(self.by[j]))
+                if d < radius and d < dist_bad[i]:
+                    dist_bad[i] = d
+                    bad_ball_xv[i] = self.bxv[j]
+                    bad_ball_yv[i] = self.byv[j]
+            # TODO: Optimization: remove balls already seen (closest seen) from relevant_balls lists
 
-        return np.hstack(([self.px, self.py, self.pxv, self.pyv], dist, ball_type, ball_xv, ball_yv))
+        return np.hstack(([self.px, self.py, self.pxv, self.pyv],
+                          dist_good, good_ball_xv, good_ball_yv,
+                          dist_bad, bad_ball_xv, bad_ball_yv))
 
     def do(self, action_idx):
         # Update balls
