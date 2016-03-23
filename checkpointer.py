@@ -1,5 +1,5 @@
 from __future__ import print_function
-from builtins import *
+
 import os
 import tensorflow as tf
 

@@ -1,8 +1,9 @@
 from __future__ import print_function, generators
-from builtins import *
+
 import numpy as np
 import random
 import matplotlib.pyplot as plt
+# TODO: Euclid is Python 2 only! Remove dependency!
 from euclid import Point2, LineSegment2
 
 """

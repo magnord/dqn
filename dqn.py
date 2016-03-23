@@ -5,7 +5,6 @@ import math
 import os
 import random
 import time
-from builtins import *
 from collections import deque
 
 import matplotlib.pyplot as plt
@@ -65,7 +64,7 @@ class DQN(Checkpointer):
             build_model(self.observation_size, self.num_actions, 'target_network')
 
         self.action_reward = tf.reduce_sum(tf.mul(self.action_scores, self.actions), reduction_indices=1)
-        self.loss = tf.reduce_sum(tf.square(self.true_reward - self.action_reward))  # TODO: Clip to (-1,1)? Sounds too drastic.
+        self.loss = tf.reduce_mean(tf.square(self.true_reward - self.action_reward))  # TODO: Clip to (-1,1)? Sounds too drastic.
         tf.scalar_summary("loss", self.loss)
 
         # Optimizer
@@ -73,17 +72,23 @@ class DQN(Checkpointer):
         self.optim = tf.train.AdamOptimizer(f.learning_rate).minimize(self.loss, global_step=self.global_step)
         # self.optim = tf.train.RMSPropOptimizer(learning_rate=self.learning_rate, decay=0.9).
         # minimize(self.loss, global_step=self.global_step)
+        if False:
+            # Track and clip gradients
+            gradients = self.optim.compute_gradients(self.loss)
+            for i, (grad, var) in enumerate(gradients):
+                if grad is not None:
+                    gradients[i] = (tf.clip_by_norm(grad, 10), var)
+            # Add histograms for gradients.
+            for grad, var in gradients:
+                tf.histogram_summary(var.name, var)
+                if grad:
+                    tf.histogram_summary(var.name + '/gradients', grad)
+            self.train_op = self.optim.apply_gradients(gradients)
+        else:
+            self.train_op = self.optim
 
         # Update target network
-        with tf.name_scope("target_network_update"):
-            self.target_network_update = []
-            network_vars = [v for v in tf.all_variables() if v.name.startswith('network')]
-            target_network_vars = [v for v in tf.all_variables() if v.name.startswith('target_network')]
-            # print([(x.name, y.name) for (x,y) in zip(network_vars, target_network_vars)])
-            for source, target in zip(network_vars, target_network_vars):
-                update_op = target.assign(source)
-                self.target_network_update.append(update_op)
-            self.target_network_update = tf.group(*self.target_network_update)
+        self.update_target_network()
 
         # Keep track of actual rewards with exponential moving average (ema)
         self.ema_decay = 0.9999
@@ -115,6 +120,17 @@ class DQN(Checkpointer):
             # Simulation step without animation
             while self.step_no <= final_step:
                 self.do_step()
+
+    def update_target_network(self):
+        with tf.name_scope("target_network_update"):
+            self.target_network_update = []
+            network_vars = [v for v in tf.all_variables() if v.name.startswith('network')]
+            target_network_vars = [v for v in tf.all_variables() if v.name.startswith('target_network')]
+            # print([(x.name, y.name) for (x,y) in zip(network_vars, target_network_vars)])
+            for source, target in zip(network_vars, target_network_vars):
+                update_op = target.assign(source)
+                self.target_network_update.append(update_op)
+            self.target_network_update = tf.group(*self.target_network_update)
 
     def animate(self, frame):
         self.do_step()
@@ -171,6 +187,7 @@ class DQN(Checkpointer):
             if len(self.memory) > self.observe:  # Only train when we have enough data in replay memory
                 batch = random.sample(self.memory, self.batch_size)
                 # TODO: Is this slow for large memory sizes? Yes. Random access to deque is O(N).
+                # TODO: Implement cyclic buffer using Python list. Much faster.
 
                 s = [mem[0] for mem in batch]
                 a = [mem[1] for mem in batch]
@@ -205,7 +222,7 @@ class DQN(Checkpointer):
                 write_summaries = self.step_no % 100 == 0 and not self.f.load_checkpoint and self.step_no >= self.observe
 
                 # Run a training step in the network
-                _, loss, summaries = self.sess.run([self.optim,
+                _, loss, summaries = self.sess.run([self.train_op,
                                                     self.loss,
                                                     self.merged_summaries if write_summaries else self.no_op],
                                                    feed_dict={
