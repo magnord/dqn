@@ -3,8 +3,6 @@ from __future__ import print_function, generators
 import numpy as np
 import random
 import matplotlib.pyplot as plt
-# TODO: Euclid is Python 2 only! Remove dependency!
-from euclid import Point2, LineSegment2
 
 """
 Catch bouncing balls, avoid bad balls. Actions are 'up', 'down', 'left and 'right'.
@@ -20,7 +18,8 @@ max_y = 1.0
 max_ball_speed = 0.005
 ray_length = 0.5
 num_rays = 16
-angles = np.linspace(0.0, 2*np.pi, num_rays, endpoint=False)
+angles = np.linspace(0.0, 2 * np.pi, num_rays, endpoint=False)
+arc_width = 2 * np.pi / num_rays
 lx = ray_length * np.cos(angles)
 ly = ray_length * np.sin(angles)
 
@@ -82,8 +81,6 @@ class BadBallsGame(object):
 
     def observation(self):
         # Do raycasting to observe balls
-        obs_ends_x = self.px + lx
-        obs_ends_y = self.py + ly
         dist_good = np.empty(num_rays)
         dist_good.fill(max_x * 2.0)  # No observation = 2 * world size
         dist_bad = np.empty(num_rays)
@@ -92,39 +89,34 @@ class BadBallsGame(object):
         good_ball_yv = np.zeros(num_rays)
         bad_ball_xv = np.zeros(num_rays)
         bad_ball_yv = np.zeros(num_rays)
-        squared_dist_to_balls = np.square(self.bx - self.px) + np.square(self.by - self.py)
+        delta_x = self.px - self.bx
+        delta_y = self.py - self.by
+        angle_b = np.arctan2(delta_y, delta_x) + np.pi
+        squared_dist_to_balls = np.square(delta_x) + np.square(delta_y)
         relevant_balls = np.where(squared_dist_to_balls < ray_length * ray_length)[0]
         relevant_good_balls = relevant_balls[relevant_balls >= num_bad_balls]
         relevant_bad_balls = relevant_balls[relevant_balls < num_bad_balls]
         # print((relevant_balls, relevant_good_balls, relevant_bad_balls))
+        # print((delta_x, delta_y, angle_b * 180 / np.pi))
         # TODO: Calculate distance and angle to each ball, then observe the closest ball in that "ray sector"
-        for i in range(num_rays):
-            for j in list(relevant_good_balls):
-                # Calculate distance from ball to ray
-                d = line_point_dist(self.px,
-                                    self.py,
-                                    float(obs_ends_x[i]),
-                                    float(obs_ends_y[i]),
-                                    float(self.bx[j]),
-                                    float(self.by[j]))
-                if d < radius and d < dist_good[i]:  # Ball distance to ray less than ball radius and smallest so far
-                    dist_good[i] = d                 # Distance to closest ball
-                    good_ball_xv[i] = self.bxv[j]    # Velocity of closest ball
-                    good_ball_yv[i] = self.byv[j]
-            for j in list(relevant_bad_balls):
-                # Calculate distance from ball to ray
-                d = line_point_dist(self.px,
-                                    self.py,
-                                    float(obs_ends_x[i]),
-                                    float(obs_ends_y[i]),
-                                    float(self.bx[j]),
-                                    float(self.by[j]))
-                if d < radius and d < dist_bad[i]:
-                    dist_bad[i] = d
-                    bad_ball_xv[i] = self.bxv[j]
-                    bad_ball_yv[i] = self.byv[j]
-            # TODO: Optimization: remove balls already seen (closest seen) from relevant_balls lists
 
+        for i in list(relevant_good_balls):
+            # Calculate which arc the ball is in
+            arc = int(angle_b[i] / arc_width)
+            if squared_dist_to_balls[i] < dist_good[arc]:  # Ball distance less than smallest so far
+                dist_good[arc] = squared_dist_to_balls[i]  # Distance to closest ball
+                good_ball_xv[arc] = self.bxv[i]              # Velocity of closest ball
+                good_ball_yv[arc] = self.byv[i]
+        for i in list(relevant_bad_balls):
+            # Calculate which arc the ball is in
+            arc = int(angle_b[i] / arc_width)
+            if squared_dist_to_balls[i] < dist_bad[arc]:  # Ball distance less than smallest so far
+                dist_bad[arc] = squared_dist_to_balls[i]  # Distance to closest ball
+                bad_ball_xv[arc] = self.bxv[i]              # Velocity of closest ball
+                bad_ball_yv[arc] = self.byv[i]
+
+        # TODO: Optimization: remove balls already seen (closest seen) from relevant_balls lists
+        # print((dist_good, dist_bad))
         return np.hstack(([self.px, self.py, self.pxv, self.pyv],
                           dist_good, good_ball_xv, good_ball_yv,
                           dist_bad, bad_ball_xv, bad_ball_yv))
@@ -168,8 +160,3 @@ class BadBallsGame(object):
 
         return self.observation()
 
-
-# Shortest distance from line (x1,y1) - (x2,y2) to point (x, y)
-def line_point_dist(x1, y1, x2, y2, x, y):
-    line = LineSegment2(Point2(x1, y1), Point2(x2, y2))
-    return line.distance(Point2(x, y))
