@@ -1,8 +1,11 @@
 from __future__ import print_function, generators
 
+import os
+
 import numpy as np
 import random
 import matplotlib.pyplot as plt
+from math import sqrt
 
 """
 Catch bouncing balls, avoid bad balls. Actions are 'up', 'down', 'left and 'right'.
@@ -16,7 +19,7 @@ radius = 0.04
 max_x = 1.0
 max_y = 1.0
 max_ball_speed = 0.005
-ray_length = 0.5
+ray_length = 0.25
 num_rays = 16
 angles = np.linspace(0.0, 2 * np.pi, num_rays, endpoint=False)
 arc_width = 2 * np.pi / num_rays
@@ -92,31 +95,32 @@ class BadBallsGame(object):
         delta_x = self.px - self.bx
         delta_y = self.py - self.by
         angle_b = np.arctan2(delta_y, delta_x) + np.pi
-        squared_dist_to_balls = np.square(delta_x) + np.square(delta_y)
-        relevant_balls = np.where(squared_dist_to_balls < ray_length * ray_length)[0]
+        dist_to_balls = np.sqrt(np.square(delta_x) + np.square(delta_y))
+        relevant_balls = np.where(dist_to_balls < ray_length)[0]
         relevant_good_balls = relevant_balls[relevant_balls >= num_bad_balls]
         relevant_bad_balls = relevant_balls[relevant_balls < num_bad_balls]
         # print((relevant_balls, relevant_good_balls, relevant_bad_balls))
         # print((delta_x, delta_y, angle_b * 180 / np.pi))
-        # TODO: Calculate distance and angle to each ball, then observe the closest ball in that "ray sector"
 
         for i in list(relevant_good_balls):
             # Calculate which arc the ball is in
             arc = int(angle_b[i] / arc_width)
-            if squared_dist_to_balls[i] < dist_good[arc]:  # Ball distance less than smallest so far
-                dist_good[arc] = squared_dist_to_balls[i]  # Distance to closest ball
+            # print('good ball {0} angle {1} ang/arcw {2} arc {3} dist {4}'.format(i, angle_b[i] * 180 / np.pi, (angle_b[i] / arc_width), arc, dist_to_balls[i]))
+            if dist_to_balls[i] < dist_good[arc]:  # Ball distance less than smallest so far
+                dist_good[arc] = dist_to_balls[i]  # Distance to closest ball
                 good_ball_xv[arc] = self.bxv[i]              # Velocity of closest ball
                 good_ball_yv[arc] = self.byv[i]
         for i in list(relevant_bad_balls):
             # Calculate which arc the ball is in
             arc = int(angle_b[i] / arc_width)
-            if squared_dist_to_balls[i] < dist_bad[arc]:  # Ball distance less than smallest so far
-                dist_bad[arc] = squared_dist_to_balls[i]  # Distance to closest ball
+            # print('bad ball {0} angle {1} ang/arcw {2} arc {3} dist {4}'.format(i, angle_b[i] * 180 / np.pi, (angle_b[i] / arc_width), arc, dist_to_balls[i]))
+            if dist_to_balls[i] < dist_bad[arc]:  # Ball distance less than smallest so far
+                dist_bad[arc] = dist_to_balls[i]  # Distance to closest ball
                 bad_ball_xv[arc] = self.bxv[i]              # Velocity of closest ball
                 bad_ball_yv[arc] = self.byv[i]
 
-        # TODO: Optimization: remove balls already seen (closest seen) from relevant_balls lists
-        # print((dist_good, dist_bad))
+        # os.system('read -s -n 1 -p "Press any key to continue..."')
+        # print()
         return np.hstack(([self.px, self.py, self.pxv, self.pyv],
                           dist_good, good_ball_xv, good_ball_yv,
                           dist_bad, bad_ball_xv, bad_ball_yv))
